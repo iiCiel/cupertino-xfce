@@ -128,7 +128,11 @@ done
 
 # 5. Files we added
 strip_block "$GTK_CSS"
-rm -f "$LAUNCHPAD_DESKTOP" "$HOME/.local/bin/cupertino-xfce-mode" "$HOME/.local/bin/cupertino-control-center"
+for f in org.xfce.xfdesktop.desktop xfdesktop.desktop; do
+  dst="$(dirname "$LAUNCHPAD_DESKTOP")/$f"
+  grep -qs 'X-Cupertino-Xfce=true' "$dst" && rm -f "$dst"
+done
+rm -f "$LAUNCHPAD_DESKTOP""$HOME/.local/bin/cupertino-xfce-mode" "$HOME/.local/bin/cupertino-control-center"
 rm -rf "$CONF_DIR" "$HOME/.themes/Cupertino-Notify" "$DATA_DIR/app" "$DATA_DIR/firefox"
 rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/cupertino-control-center-symbolic.svg"
 

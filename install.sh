@@ -422,6 +422,23 @@ Exec=rofi -show drun -theme $CONF_DIR/rofi/launchpad.rasi
 Icon=view-app-grid
 Categories=Utility;
 EOF
+# Give the desktop an app name, so the menu bar says "Finder" instead of "xfdesktop"
+# when the wallpaper has focus. Hidden from app launchers.
+for f in org.xfce.xfdesktop.desktop xfdesktop.desktop; do
+  dst="$(dirname "$LAUNCHPAD_DESKTOP")/$f"
+  [[ -e "$dst" ]] && ! grep -q 'X-Cupertino-Xfce=true' "$dst" && continue
+  cat > "$dst" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Finder
+Comment=Desktop
+Exec=thunar
+Icon=system-file-manager
+StartupWMClass=xfdesktop
+NoDisplay=true
+X-Cupertino-Xfce=true
+EOF
+done
 ok "Inter font · Super+Space Spotlight · Ctrl+Up Mission Control · Super+Q · Super+Shift+3/4/5"
 
 # ---- 7. global menu ------------------------------------------------------------------
