@@ -64,6 +64,7 @@ rm -f "$AUTOSTART_PICOM" "$AUTOSTART_PLANK" "${XDG_CONFIG_HOME:-$HOME/.config}/a
 pkill -u "$(id -u)" -x plank 2>/dev/null || true
 pkill -u "$(id -u)" -f "picom --config $CONF_DIR/picom.conf" 2>/dev/null || true
 pkill -u "$(id -u)" -f cupertino-control-center 2>/dev/null || true
+pkill -u "$(id -u)" -f 'python3 .*cupertino-menu[d]' 2>/dev/null || true
 
 # 2. xfconf settings: replay newest backup -> oldest, so the original values win.
 log "Restoring settings"
@@ -132,7 +133,7 @@ for f in org.xfce.xfdesktop.desktop xfdesktop.desktop; do
   dst="$(dirname "$LAUNCHPAD_DESKTOP")/$f"
   grep -qs 'X-Cupertino-Xfce=true' "$dst" && rm -f "$dst"
 done
-rm -f "$LAUNCHPAD_DESKTOP""$HOME/.local/bin/cupertino-xfce-mode" "$HOME/.local/bin/cupertino-control-center"
+rm -f "$LAUNCHPAD_DESKTOP" "$AUTOSTART_MENUD" "$HOME/.local/bin/cupertino-xfce-mode" "$HOME/.local/bin/cupertino-control-center" "$HOME/.local/bin/cupertino-menud"
 rm -rf "$CONF_DIR" "$HOME/.themes/Cupertino-Notify" "$DATA_DIR/app" "$DATA_DIR/firefox"
 rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/cupertino-control-center-symbolic.svg"
 

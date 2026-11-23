@@ -46,7 +46,7 @@ PLANK_DEBS=(
 PACKAGES=(git curl xz-utils bzip2 x11-xserver-utils xdg-user-dirs picom rofi fonts-inter fonts-jetbrains-mono
           python3-gi gir1.2-gtk-3.0 xfce4-panel-profiles xfce4-docklike-plugin xfce4-whiskermenu-plugin
           xfce4-pulseaudio-plugin xfce4-notifyd xfce4-power-manager-plugins xfce4-screenshooter)
-APPMENU_PACKAGES=(appmenu-registrar appmenu-gtk3-module)
+APPMENU_PACKAGES=(appmenu-registrar appmenu-gtk3-module gir1.2-wnck-3.0 xdotool wmctrl x11-utils)
 
 # ---- options --------------------------------------------------------------------------
 MODE="light"; DOCK="plank"; DO_LOGIN=1; DO_GLOBAL_MENU=1; DO_EFFECTS=1; DO_BOOT=1; DO_FIREFOX=1; DO_TERMINAL=1
@@ -314,9 +314,10 @@ ok "Saved to $BACKUP_DIR"
 # ---- 3. self-contained app copy + helper commands ------------------------------------
 rm -rf "$APP_DIR"; mkdir -p "$APP_DIR"
 cp -a "$HERE/lib" "$HERE/config" "$HERE/apps" "$APP_DIR/"
-chmod +x "$APP_DIR/lib/mode.sh" "$APP_DIR/apps/cupertino-control-center"
+chmod +x "$APP_DIR/lib/mode.sh" "$APP_DIR/apps/cupertino-control-center" "$APP_DIR/apps/cupertino-menud"
 ln -sf "$APP_DIR/lib/mode.sh" "$BIN_DIR/cupertino-xfce-mode"
 ln -sf "$APP_DIR/apps/cupertino-control-center" "$BIN_DIR/cupertino-control-center"
+ln -sf "$APP_DIR/apps/cupertino-menud" "$BIN_DIR/cupertino-menud"
 # shellcheck source=lib/mode.sh
 source "$APP_DIR/lib/mode.sh"
 
@@ -450,7 +451,23 @@ if [[ $DO_GLOBAL_MENU -eq 1 ]]; then
   if [[ ":$mods:" != *":appmenu-gtk-module:"* ]]; then
     apply_prop xsettings /Gtk/Modules string "${mods:+$mods:}appmenu-gtk-module"
   fi
+  # Apps with no menus of their own (Firefox, the desktop, ...) get standard Mac ones
+  mkdir -p "$(dirname "$AUTOSTART_MENUD")"
+  cat > "$AUTOSTART_MENUD" <<EOF
+[Desktop Entry]
+Type=Application
+Name=cupertino-xfce menus
+Comment=File/Edit/View menus for apps that have none
+Exec=$BIN_DIR/cupertino-menud
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
+EOF
+  pkill -u "$(id -u)" -f 'python3 .*cupertino-menu[d]' 2>/dev/null || true
+  setsid "$BIN_DIR/cupertino-menud" >/dev/null 2>&1 < /dev/null &
   ok "Apps send their menus to the menu bar (restart running apps to see it)"
+else
+  rm -f "$AUTOSTART_MENUD"
 fi
 
 # ---- 8. panels: a menu bar on every monitor + the dock ---------------------------------
