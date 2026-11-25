@@ -80,7 +80,6 @@ EOF
       echo "$(sel '#appmenu-ID, #appmenu-ID *, #appmenu-ID menubar > menuitem label' "${appmenu[@]}") { color: $BAR_FG; }"
       echo "$(sel '#appmenu-ID menubar' "${appmenu[@]}") { background: transparent; box-shadow: none; border: none; }"
       echo "$(sel '#appmenu-ID menubar > menuitem' "${appmenu[@]}") { padding: 0 9px; }"
-      echo "$(sel '#appmenu-ID menubar > menuitem:first-child label' "${appmenu[@]}") { font-weight: bold; }"
     fi
     [[ ${#clock[@]} -gt 0 ]] && echo "$(sel '#clock-ID, #clock-ID *' "${clock[@]}") { color: $BAR_FG; }"
     # status icons and the Control Center icon are symbolic: they take the bar's text colour

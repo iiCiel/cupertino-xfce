@@ -9,7 +9,7 @@ Built on Kali Linux (Xfce 4.20) and tested on a clean Ubuntu 26.04 Xfce system. 
 
 | | |
 |---|---|
-| **Global menu bar** | The focused app's **File / Edit / View…** menus in the top bar, its name in bold. On the right, like macOS: Wi-Fi, sound, battery, a Spotlight icon, Control Center and the date. One menu bar on every monitor. |
+| **Global menu bar** | The focused app's name and **File / Edit / View…** menus in the top bar. Apps without menus of their own (Firefox, the desktop) get standard Mac ones. On the right, like macOS: Wi-Fi, sound, battery, a Spotlight icon, Control Center and the date. One menu bar on every monitor. |
 | **Control Center** | Click the toggles icon next to the clock: Wi-Fi, Bluetooth, Focus (Do Not Disturb), Dark Mode, display brightness, volume, plus Screenshot / Lock / Settings. |
 | **Magnifying dock** | Icons grow as your mouse passes over them, like on a Mac. Floating, frosted and rounded, with dots under running apps, and Downloads and Trash at the right end. Hides when a window covers it ([Plank Reloaded](https://github.com/zquestz/plank-reloaded)). |
 | **Spotlight** | **Super+Space** to search and launch apps. |
@@ -78,23 +78,25 @@ Backups live in `~/.local/share/cupertino-xfce/backups/`. Each holds your previo
 ## What it changes
 
 - **Dock**: [Plank Reloaded](https://github.com/zquestz/plank-reloaded) from your distro if it has it; otherwise its author's Debian build from `zquestz.github.io/ppa/debian`, pinned by SHA-256. This is the one package that doesn't come from your distro or Debian; use `--docklike` to skip it.
-- **Packages** (only the missing ones): `bzip2 picom rofi fonts-inter fonts-jetbrains-mono python3-gi gir1.2-gtk-3.0 xfce4-panel-profiles xfce4-docklike-plugin xfce4-whiskermenu-plugin xfce4-pulseaudio-plugin xfce4-notifyd xfce4-power-manager-plugins xfce4-screenshooter appmenu-registrar appmenu-gtk3-module git curl xz-utils x11-xserver-utils xdg-user-dirs`.
+- **Packages** (only the missing ones): `bzip2 picom rofi fonts-inter fonts-jetbrains-mono python3-gi gir1.2-gtk-3.0 xfce4-panel-profiles xfce4-docklike-plugin xfce4-whiskermenu-plugin xfce4-pulseaudio-plugin xfce4-notifyd xfce4-power-manager-plugins xfce4-screenshooter appmenu-registrar appmenu-gtk3-module gir1.2-wnck-3.0 xdotool wmctrl x11-utils git curl xz-utils x11-xserver-utils xdg-user-dirs`.
 - **Global-menu plugin** (`xfce4-appmenu-plugin`): from your distro if it has it. Kali doesn't, so the installer fetches Debian's official build from [snapshot.debian.org](https://snapshot.debian.org) and checks its SHA-256 before installing.
 - **WhiteSur** theme, icons, cursors and Firefox theme: downloaded from upstream at a pinned commit, archives checksum-verified. Their install scripts aren't run.
 - **Panels**: replaced with a menu bar per monitor and a dock, via `xfce4-panel-profiles`. Your old layout is saved first.
 - **Settings** (`xfconf`): GTK/window theme, icons, cursor, font, window buttons, wallpaper, notifications, keyboard shortcuts, global-menu settings, compositor.
 - **Your files**: a marked block in `~/.config/gtk-3.0/gtk.css`; `gtk-enable-mnemonics` in `~/.config/gtk-3.0/settings.ini`; colour scheme, font and transparency in `~/.config/qterminal.org/qterminal.ini`; Firefox profiles get a `chrome` link and a marked block in `user.js`.
-- **New files**: Plank's dock settings and `~/.config/plank/dock1/launchers/`, two Plank themes in `~/.local/share/plank/themes/`, `~/.config/cupertino-xfce/`, `~/.local/share/cupertino-xfce/`, `~/.local/bin/cupertino-xfce-mode`, `~/.local/bin/cupertino-control-center`, the Launchpad entry, the `Cupertino-Notify` notification theme, and autostart entries for picom and a one-time setup step.
+- **New files**: Plank's dock settings and `~/.config/plank/dock1/launchers/`, two Plank themes in `~/.local/share/plank/themes/`, `~/.config/cupertino-xfce/`, `~/.local/share/cupertino-xfce/`, `~/.local/bin/cupertino-xfce-mode`, `~/.local/bin/cupertino-control-center`, `~/.local/bin/cupertino-menud`, the Launchpad entry, a hidden "Finder" entry that names the desktop in the menu bar, the `Cupertino-Notify` notification theme, and autostart entries for picom, the menu helper and a one-time setup step.
 - **System (root)**: a `WhiteSur-Login` theme, blurred background and a few keys in `/etc/lightdm/lightdm-gtk-greeter.conf` (only with the LightDM GTK greeter); two QTerminal colour schemes in `/usr/share/qtermwidget6/color-schemes`; a `cupertino` Plymouth theme set as default (only if Plymouth is active, plus `plymouth-label` if missing), which rebuilds your initramfs.
 
 ## Which apps get the global menu?
 
-| Works | Doesn't (keeps its own menu in the window) |
+| Their own menus in the top bar | Standard Mac menus from `cupertino-menud` |
 |---|---|
-| GTK3 apps: Files (Thunar), Mousepad, Xfce settings, most Xfce apps | Firefox (Debian/Kali builds lack the global-menu patch) |
-| LibreOffice | Java apps, e.g. Burp Suite |
-| Most Electron/Chromium apps that have a menu bar | GTK4 / libadwaita apps (they have no menu bar) |
-| | Qt apps, unless your distro ships `appmenu-qt5` (Kali doesn't) |
+| GTK3 apps: Files (Thunar), Mousepad, Xfce settings, most Xfce apps | Firefox (Debian/Kali builds can't export their menus): File, Edit, View, History, Bookmarks, Window, Help |
+| Qt apps such as QTerminal | The desktop ("Finder"): File, Edit, View, Go, Window, Help |
+| LibreOffice | Apps with no menu bar (GTK4/libadwaita, terminals like kitty), and Java apps such as Burp Suite (which keep their in-window menus too) |
+| Most Electron/Chromium apps that have a menu bar | |
+
+The standard menus work by sending the app its usual keyboard shortcut (Copy sends Ctrl+C, New Tab sends Ctrl+T), so they do what the app's own shortcut does.
 
 ## Known issues
 
@@ -102,6 +104,7 @@ Backups live in `~/.local/share/cupertino-xfce/backups/`. Each holds your previo
 - **Wayland isn't supported.** Use the normal Xfce (X11) session.
 - **picom needs working OpenGL.** If it can't start, the installer falls back to Xfce's own compositor (no blur or rounded corners) and tells you.
 - **Ctrl+Up** opens Mission Control everywhere, like on a Mac, so apps that use Ctrl+Up themselves won't see it.
+- The app name in the menu bar isn't bold: the menu plugin orders its items differently per app, so a bold rule would sometimes land on the wrong menu.
 - Menus no longer show underlined shortcut letters (`gtk-enable-mnemonics=false`); Alt+letter menu shortcuts inside GTK apps are off too.
 - A QTerminal window that's open during install keeps its old colours until you open a new one after logging back in.
 - With `--docklike`, some apps show as a second dock icon instead of lighting up their pinned one, when their window class doesn't match their `.desktop` file.
