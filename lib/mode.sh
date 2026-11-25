@@ -95,24 +95,32 @@ connected_outputs() {
     | sort -s -n -k1,1 | cut -d' ' -f2
 }
 
+# Wallpaper. Only ever replaces our own wallpapers (or, during install, everything), so a
+# picture the user picked in Desktop Settings survives light/dark switches, logins and
+# monitor changes. Monitors without an entry get the main monitor's picture.
 set_wallpaper() {
-  local wp="$WALL_DIR/$WALLPAPER.jpg" k o w n base
+  local wp="$WALL_DIR/$WALLPAPER.jpg" k v o w n base ref main
   [[ -f $wp ]] || return 0
-  # Make sure every connected monitor and workspace has an entry (new monitors otherwise
-  # get the distro's default wallpaper)
+  while IFS= read -r k; do
+    v=$(xfconf-query -c xfce4-desktop -p "$k" 2>/dev/null || true)
+    if [[ ${WALLPAPER_ALL:-0} == 1 || -z $v || $v == "$WALL_DIR/"* ]]; then
+      xset_prop xfce4-desktop "$k" string "$wp"
+    fi
+  done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/workspace[0-9]+/last-image$' || true)
+  main=$(connected_outputs | head -n 1)
+  ref=$(xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor$main/workspace0/last-image" 2>/dev/null || true)
+  [[ -n $ref ]] || ref=$wp
   n=$(xfconf-query -c xfwm4 -p /general/workspace_count 2>/dev/null || echo 4)
   while IFS= read -r o; do
     [[ -n $o ]] || continue
     for ((w = 0; w < n; w++)); do
       base="/backdrop/screen0/monitor$o/workspace$w"
-      xset_prop xfce4-desktop "$base/last-image" string "$wp"
+      xfconf-query -c xfce4-desktop -p "$base/last-image" >/dev/null 2>&1 && continue
+      xfconf-query -c xfce4-desktop -p "$base/last-image" -n -t string -s "$ref"
       xfconf-query -c xfce4-desktop -p "$base/image-style" >/dev/null 2>&1 \
         || xfconf-query -c xfce4-desktop -p "$base/image-style" -n -t int -s 5
     done
   done < <(connected_outputs)
-  while IFS= read -r k; do
-    xset_prop xfce4-desktop "$k" string "$wp"
-  done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/workspace[0-9]+/last-image$' || true)
 }
 
 set_dock_dots() {

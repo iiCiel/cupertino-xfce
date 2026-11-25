@@ -653,7 +653,7 @@ fi
 
 # ---- 11. light/dark look -------------------------------------------------------------
 log "Applying $MODE mode"
-NO_PANEL_RESTART=1 apply_mode "$MODE"
+NO_PANEL_RESTART=1 WALLPAPER_ALL=1 apply_mode "$MODE"
 xfce4-panel -r >/dev/null 2>&1 || true
 ok "$MODE mode (switch any time: Control Center, or cupertino-xfce-mode toggle)"
 
