@@ -583,6 +583,7 @@ if [[ $DO_TERMINAL -eq 1 ]]; then
 Type=Application
 Name=cupertino-xfce (finish setup)
 Exec=$BIN_DIR/cupertino-xfce-mode once
+OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOF
   ok "Cupertino terminal colours, JetBrains Mono 11 (fully applies to new windows after next login)"
@@ -641,6 +642,7 @@ Type=Application
 Name=picom (cupertino-xfce)
 Comment=Blur, rounded corners and shadows
 Exec=picom --config $CONF_DIR/picom.conf
+OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOF
   if pgrep -u "$(id -u)" -x picom >/dev/null; then pkill -u "$(id -u)" -x picom || true; sleep 1; fi
