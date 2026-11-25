@@ -80,6 +80,12 @@ for ((i = ${#BACKUPS[@]} - 1; i >= 0; i--)); do
     fi
   done < "$tsv"
 done
+# Monitors connected after install got our wallpaper without a recorded original:
+# hand them back to the default
+while IFS= read -r k; do
+  v=$(xfconf-query -c xfce4-desktop -p "$k" 2>/dev/null || true)
+  [[ $v == *"/backgrounds/cupertino-xfce/"* ]] && xfconf-query -c xfce4-desktop -p "$k" -r 2>/dev/null
+done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/last-image$' || true)
 # INI files (qterminal.ini, gtk-3.0/settings.ini), same order
 for ((i = ${#BACKUPS[@]} - 1; i >= 0; i--)); do
   tsv="${BACKUPS[$i]}/ini.tsv"

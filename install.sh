@@ -451,23 +451,7 @@ if [[ $DO_GLOBAL_MENU -eq 1 ]]; then
   if [[ ":$mods:" != *":appmenu-gtk-module:"* ]]; then
     apply_prop xsettings /Gtk/Modules string "${mods:+$mods:}appmenu-gtk-module"
   fi
-  # Apps with no menus of their own (Firefox, the desktop, ...) get standard Mac ones
-  mkdir -p "$(dirname "$AUTOSTART_MENUD")"
-  cat > "$AUTOSTART_MENUD" <<EOF
-[Desktop Entry]
-Type=Application
-Name=cupertino-xfce menus
-Comment=File/Edit/View menus for apps that have none
-Exec=$BIN_DIR/cupertino-menud
-OnlyShowIn=XFCE;
-X-GNOME-Autostart-enabled=true
-NoDisplay=true
-EOF
-  pkill -u "$(id -u)" -f 'python3 .*cupertino-menu[d]' 2>/dev/null || true
-  setsid "$BIN_DIR/cupertino-menud" >/dev/null 2>&1 < /dev/null &
   ok "Apps send their menus to the menu bar (restart running apps to see it)"
-else
-  rm -f "$AUTOSTART_MENUD"
 fi
 
 # ---- 8. panels: a menu bar on every monitor + the dock ---------------------------------
@@ -698,6 +682,23 @@ EOF
     xset_prop xfwm4 /general/use_compositing bool true
   fi
 fi
+
+# ---- 12b. background helper: standard menus for apps without any, and a wallpaper and
+#          menu bar on every monitor when monitors are plugged in or out
+mkdir -p "$(dirname "$AUTOSTART_MENUD")"
+cat > "$AUTOSTART_MENUD" <<EOF
+[Desktop Entry]
+Type=Application
+Name=cupertino-xfce helper
+Comment=Standard menus for apps without any; menu bar and wallpaper on every monitor
+Exec=$BIN_DIR/cupertino-menud
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
+EOF
+pkill -u "$(id -u)" -f 'python3 .*cupertino-menu[d]' 2>/dev/null || true
+setsid "$BIN_DIR/cupertino-menud" >/dev/null 2>&1 < /dev/null &
+ok "Helper running: menus for apps without any, a menu bar on every monitor"
 
 # ---- 13. system styling (root): login screen, terminal schemes, boot splash ------------
 ROOT2="$BACKUP_DIR/root-system.sh"

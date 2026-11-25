@@ -9,7 +9,7 @@ Built on Kali Linux (Xfce 4.20) and tested on a clean Ubuntu 26.04 Xfce system. 
 
 | | |
 |---|---|
-| **Global menu bar** | The focused app's name and **File / Edit / View…** menus in the top bar. Apps without menus of their own (Firefox, the desktop) get standard Mac ones. On the right, like macOS: Wi-Fi, sound, battery, a Spotlight icon, Control Center and the date. One menu bar on every monitor. |
+| **Global menu bar** | The focused app's name and **File / Edit / View…** menus in the top bar. Apps without menus of their own (Firefox, the desktop) get standard Mac ones. On the right, like macOS: Wi-Fi, sound, battery, a Spotlight icon, Control Center and the date. One menu bar on every monitor, including ones you plug in later (they get the wallpaper too). |
 | **Control Center** | Click the toggles icon next to the clock: Wi-Fi, Bluetooth, Focus (Do Not Disturb), Dark Mode, display brightness, volume, plus Screenshot / Lock / Settings. |
 | **Magnifying dock** | Icons grow as your mouse passes over them, like on a Mac. Floating, frosted and rounded, with dots under running apps, and Downloads and Trash at the right end. Hides when a window covers it ([Plank Reloaded](https://github.com/zquestz/plank-reloaded)). |
 | **Spotlight** | **Super+Space** to search and launch apps. |

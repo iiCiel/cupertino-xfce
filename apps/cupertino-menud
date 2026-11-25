@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""cupertino-menud: give every window a Mac-style menu bar.
+"""cupertino-menud: the cupertino-xfce background helper.
+
+1. Gives every window a Mac-style menu bar (below).
+2. When a monitor is plugged in or out, puts the wallpaper and a menu bar on every
+   screen (runs `cupertino-xfce-mode monitors`).
 
 Apps that export their own menus (GTK menubars, Qt, Electron, ...) keep them.
 Windows that export nothing, or an empty menu (Firefox, terminals without a
@@ -17,9 +21,10 @@ import warnings
 
 import gi
 
+gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
 gi.require_version("Wnck", "3.0")
-from gi.repository import Gio, GLib, Gtk, Wnck  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Wnck  # noqa: E402
 
 BUS_NAME = "io.github.iiCiel.CupertinoMenu"
 BASE_PATH = "/io/github/iiCiel/CupertinoMenu"
@@ -390,10 +395,26 @@ class Daemon:
         self.screen.force_update()
         self.screen.connect("active-window-changed", self.on_active)
         self.screen.connect("window-opened", self.on_opened)
+        # Monitors: re-sync wallpaper and menu bars after a change (debounced), and once
+        # shortly after login in case monitors changed while logged out.
+        self.mon_timer = 0
+        Gdk.Screen.get_default().connect("monitors-changed", self.on_monitors)
+        self.mon_timer = GLib.timeout_add_seconds(5, self.sync_monitors)
         # The registrar forgets everything when it restarts (e.g. when the panel restarts),
         # so (re)register all windows every time it appears on the bus.
         Gio.bus_watch_name_on_connection(self.conn, "com.canonical.AppMenu.Registrar",
                                          Gio.BusNameWatcherFlags.NONE, self.on_registrar, None)
+
+    def on_monitors(self, *_args):
+        if self.mon_timer:
+            GLib.source_remove(self.mon_timer)
+        self.mon_timer = GLib.timeout_add_seconds(3, self.sync_monitors)
+
+    def sync_monitors(self):
+        self.mon_timer = 0
+        print("cupertino-menud: syncing wallpaper and menu bars with the monitors", file=sys.stderr, flush=True)
+        run(shutil.which("cupertino-xfce-mode") or os.path.expanduser("~/.local/bin/cupertino-xfce-mode"), "monitors")
+        return False
 
     def on_registrar(self, *_args):
         self.ours.clear()

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # cupertino-xfce-mode: switch the whole look between light and dark.
 #
-#   cupertino-xfce-mode light | dark | toggle | status
+#   cupertino-xfce-mode light | dark | toggle | status | monitors
 #
 # Installed by install.sh to ~/.local/share/cupertino-xfce/app and linked as
 # ~/.local/bin/cupertino-xfce-mode. Also used by Control Center's Appearance toggle.
@@ -89,9 +89,27 @@ EOF
   } >> "$GTK_CSS"
 }
 
+# Connected outputs, the primary (or else the first) one first: it gets the full menu bar.
+connected_outputs() {
+  xrandr --listmonitors 2>/dev/null | awk 'NR > 1 { name = $2; prim = (name ~ /\*/); gsub(/^[+*]+/, "", name); print (prim ? 0 : 1), name }' \
+    | sort -s -n -k1,1 | cut -d' ' -f2
+}
+
 set_wallpaper() {
-  local wp="$WALL_DIR/$WALLPAPER.jpg" k
+  local wp="$WALL_DIR/$WALLPAPER.jpg" k o w n base
   [[ -f $wp ]] || return 0
+  # Make sure every connected monitor and workspace has an entry (new monitors otherwise
+  # get the distro's default wallpaper)
+  n=$(xfconf-query -c xfwm4 -p /general/workspace_count 2>/dev/null || echo 4)
+  while IFS= read -r o; do
+    [[ -n $o ]] || continue
+    for ((w = 0; w < n; w++)); do
+      base="/backdrop/screen0/monitor$o/workspace$w"
+      xset_prop xfce4-desktop "$base/last-image" string "$wp"
+      xfconf-query -c xfce4-desktop -p "$base/image-style" >/dev/null 2>&1 \
+        || xfconf-query -c xfce4-desktop -p "$base/image-style" -n -t int -s 5
+    done
+  done < <(connected_outputs)
   while IFS= read -r k; do
     xset_prop xfce4-desktop "$k" string "$wp"
   done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/workspace[0-9]+/last-image$' || true)
@@ -114,6 +132,106 @@ set_bar_colours() {
   for p in "${bars[@]}"; do
     xfconf-query -c xfce4-panel -p "/panels/panel-$p/background-rgba" -s "${BAR_RGBA[0]}" -s "${BAR_RGBA[1]}" -s "${BAR_RGBA[2]}" -s "${BAR_RGBA[3]}" 2>/dev/null || true
   done
+}
+
+# ---- one menu bar per connected monitor ------------------------------------------------
+xp_new() { # channel-less helper for xfce4-panel: prop type value
+  xfconf-query -c xfce4-panel -p "$1" -r -R 2>/dev/null || true
+  xfconf-query -c xfce4-panel -p "$1" -n -t "$2" -s "$3"
+}
+
+new_bar() { # output -> creates a menu bar panel on it, prints the panel id
+  local out=$1 p m app sep clk
+  p=$(( $(xfconf-query -c xfce4-panel -p /panels 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -n 1) + 1 ))
+  m=$(( $(xfconf-query -c xfce4-panel -l | sed -n 's|^/plugins/plugin-\([0-9]*\)$|\1|p' | sort -n | tail -n 1) + 1 ))
+  app=$((m + 1)); sep=$((m + 2)); clk=$((m + 3))
+  xp_new "/plugins/plugin-$m" string whiskermenu
+  if [[ -n $(state_get APPMENU_IDS) ]]; then
+    xp_new "/plugins/plugin-$app" string appmenu
+    xp_new "/plugins/plugin-$app/bold-application-name" bool false
+    xp_new "/plugins/plugin-$app/plugins/plugin-$app/expand" bool true
+  else
+    xp_new "/plugins/plugin-$app" string separator
+  fi
+  xp_new "/plugins/plugin-$sep" string separator
+  xp_new "/plugins/plugin-$sep/expand" bool true
+  xp_new "/plugins/plugin-$sep/style" uint 0
+  xp_new "/plugins/plugin-$clk" string clock
+  xp_new "/plugins/plugin-$clk/digital-layout" uint 3
+  xp_new "/plugins/plugin-$clk/digital-time-font" string "Inter Semi-Bold 10"
+  xp_new "/plugins/plugin-$clk/digital-time-format" string "%a %b %-d  %-I:%M %p"
+  xp_new "/plugins/plugin-$clk/mode" uint 2
+  xfconf-query -c xfce4-panel -p "/panels/panel-$p/background-rgba" -n -a \
+    -t double -s "${BAR_RGBA[0]}" -t double -s "${BAR_RGBA[1]}" -t double -s "${BAR_RGBA[2]}" -t double -s "${BAR_RGBA[3]}"
+  xp_new "/panels/panel-$p/background-style" uint 1
+  xp_new "/panels/panel-$p/length" uint 100
+  xp_new "/panels/panel-$p/output-name" string "$out"
+  xp_new "/panels/panel-$p/position" string "p=6;x=0;y=0"
+  xp_new "/panels/panel-$p/position-locked" bool true
+  xp_new "/panels/panel-$p/size" uint 28
+  xfconf-query -c xfce4-panel -p "/panels/panel-$p/plugin-ids" -n -a \
+    -t int -s "$m" -t int -s "$app" -t int -s "$sep" -t int -s "$clk"
+  local -a ids=(); local id
+  mapfile -t ids < <(xfconf-query -c xfce4-panel -p /panels | grep -E '^[0-9]+$')
+  ids+=("$p")
+  local -a args=(); for id in "${ids[@]}"; do args+=(-t int -s "$id"); done
+  xfconf-query -c xfce4-panel -p /panels -a "${args[@]}"
+  [[ -n $(state_get APPMENU_IDS) ]] && state_set APPMENU_IDS "$(state_get APPMENU_IDS) $app"
+  state_set CLOCK_IDS "$(state_get CLOCK_IDS) $clk"
+  state_set BAR_PANELS "$(state_get BAR_PANELS) $p"
+}
+
+# Give every connected monitor exactly one menu bar: keep bars whose monitor is still
+# there, move bars whose monitor is gone, and only create a bar when there are more
+# monitors than bars. Prints "restart" when the panel needs restarting.
+sync_bars() {
+  local -a outs bars free=(); local p o
+  declare -A used=()
+  mapfile -t outs < <(connected_outputs)
+  [[ ${#outs[@]} -gt 0 ]] || return 0
+  read -r -a bars <<<"$(state_get BAR_PANELS)"
+  [[ ${#bars[@]} -gt 0 ]] || return 0
+  # The first bar (with the status icons) belongs on the main monitor.
+  xset_prop xfce4-panel "/panels/panel-${bars[0]}/output-name" string "${outs[0]}"
+  used[${outs[0]}]=${bars[0]}
+  for p in "${bars[@]:1}"; do
+    o=$(xfconf-query -c xfce4-panel -p "/panels/panel-$p/output-name" 2>/dev/null || true)
+    if [[ -n $o && -z ${used[$o]:-} ]] && printf '%s\n' "${outs[@]}" | grep -qxF -- "$o"; then
+      used[$o]=$p
+    else
+      free+=("$p")
+    fi
+  done
+  local restart=0
+  for o in "${outs[@]}"; do
+    [[ -n ${used[$o]:-} ]] && continue
+    if [[ ${#free[@]} -gt 0 ]]; then
+      p=${free[0]}; free=("${free[@]:1}")
+      xset_prop xfce4-panel "/panels/panel-$p/output-name" string "$o"
+    else
+      new_bar "$o"; restart=1
+    fi
+    used[$o]=1
+  done
+  # Spare bars wait (hidden) for their monitor; park any that would duplicate a bar.
+  for p in "${free[@]}"; do
+    o=$(xfconf-query -c xfce4-panel -p "/panels/panel-$p/output-name" 2>/dev/null || true)
+    if [[ -z $o ]] || printf '%s\n' "${outs[@]}" | grep -qxF -- "$o"; then
+      xset_prop xfce4-panel "/panels/panel-$p/output-name" string "cupertino-spare-$p"
+    fi
+  done
+  [[ $restart == 1 ]] && echo restart
+  return 0
+}
+
+sync_monitors() {
+  local cur; cur=$(state_get MODE || true)
+  mode_vars "${cur:-light}"
+  set_wallpaper
+  if [[ $(sync_bars) == restart ]]; then
+    write_gtk_css
+    xfce4-panel -r >/dev/null 2>&1 || true
+  fi
 }
 
 set_notify_theme() {
@@ -169,7 +287,9 @@ main() {
           # open QTerminal overwrote when it closed, then remove this autostart entry
       mode_vars "$cur"; set_terminal
       rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/cupertino-xfce-once.desktop" ;;
-    *) echo "usage: cupertino-xfce-mode light|dark|toggle|status" >&2; exit 2 ;;
+    monitors) # a monitor was plugged in or out: wallpaper and a menu bar on every screen
+      sync_monitors ;;
+    *) echo "usage: cupertino-xfce-mode light|dark|toggle|status|monitors" >&2; exit 2 ;;
   esac
 }
 
