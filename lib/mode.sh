@@ -83,7 +83,8 @@ EOF
     fi
     [[ ${#clock[@]} -gt 0 ]] && echo "$(sel '#clock-ID, #clock-ID *' "${clock[@]}") { color: $BAR_FG; }"
     # status icons and the Control Center icon are symbolic: they take the bar's text colour
-    echo "#XfcePanelWindow, $(sel '#ID, #ID *' systray-4 pulseaudio-5 power-manager-plugin-7 launcher-11 launcher-12) { color: $BAR_FG; }"
+    local -a status; read -r -a status <<<"$(status_widgets)"
+    echo "#XfcePanelWindow, $(sel '#ID, #ID *' "${status[@]}") { color: $BAR_FG; }"
     cat "$APP_DIR/config/lockscreen.css"
     echo "/* <<< cupertino-xfce <<< */"
   } >> "$GTK_CSS"
@@ -95,7 +96,7 @@ connected_outputs() {
     | sort -s -n -k1,1 | cut -d' ' -f2
 }
 
-# Wallpaper. Only ever replaces our own wallpapers (or, during install, everything), so a
+# Wallpaper. Only ever replaces the light/dark defaults (or, during install, everything), so a
 # picture the user picked in Desktop Settings survives light/dark switches, logins and
 # monitor changes. Monitors without an entry get the main monitor's picture.
 set_wallpaper() {
@@ -103,7 +104,8 @@ set_wallpaper() {
   [[ -f $wp ]] || return 0
   while IFS= read -r k; do
     v=$(xfconf-query -c xfce4-desktop -p "$k" 2>/dev/null || true)
-    if [[ ${WALLPAPER_ALL:-0} == 1 || -z $v || $v == "$WALL_DIR/"* ]]; then
+    # only the light/dark defaults follow the mode; any other picture is the user's pick
+    if [[ ${WALLPAPER_ALL:-0} == 1 || -z $v || $v == "$WALL_DIR/blue-waves.jpg" || $v == "$WALL_DIR/dusk-waves.jpg" ]]; then
       xset_prop xfce4-desktop "$k" string "$wp"
     fi
   done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/workspace[0-9]+/last-image$' || true)
@@ -148,12 +150,69 @@ xp_new() { # channel-less helper for xfce4-panel: prop type value
   xfconf-query -c xfce4-panel -p "$1" -n -t "$2" -s "$3"
 }
 
-new_bar() { # output -> creates a menu bar panel on it, prints the panel id
-  local out=$1 p m app sep clk
+next_plugin_id() {
+  echo $(( $(xfconf-query -c xfce4-panel -l | sed -n 's|^/plugins/plugin-\([0-9]*\)$|\1|p' | sort -n | tail -n 1) + 1 ))
+}
+
+status_widgets() { local w; w=$(state_get STATUS_WIDGETS || true); echo "${w:-systray-4 pulseaudio-5 power-manager-plugin-7 launcher-11 launcher-12}"; }
+
+launcher_plugin() { # desktop-file-name source-launcher-dir -> creates a launcher plugin, prints its id
+  local name=$1 src=$2 id d
+  id=$(next_plugin_id)
+  xp_new "/plugins/plugin-$id" string launcher
+  xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/items" -n -a -t string -s "$name"
+  xp_new "/plugins/plugin-$id/show-label" bool false
+  d="${XDG_CONFIG_HOME:-$HOME/.config}/xfce4/panel/launcher-$id"
+  mkdir -p "$d"
+  if [[ -f $src/$name ]]; then
+    cp "$src/$name" "$d/$name"
+  elif [[ $name == cupertino-spotlight.desktop ]]; then
+    printf '[Desktop Entry]\nType=Application\nName=Spotlight\nComment=Search apps (Super+Space)\nExec=rofi -show drun -theme %s\nIcon=system-search-symbolic\nStartupNotify=false\n' \
+      "$CONF_DIR/rofi/spotlight.rasi" > "$d/$name"
+  else
+    sed "s|^Exec=.*|Exec=$HOME/.local/bin/cupertino-control-center|" "$APP_DIR/config/icons/cupertino-control-center.desktop" > "$d/$name"
+  fi
+  echo "$id"
+}
+
+# Sound, battery, Spotlight and Control Center for an extra menu bar. The tray (Wi-Fi,
+# Bluetooth, app icons) and the power-manager battery can't be repeated (one per desktop),
+# so extra bars use Xfce's separate battery plugin when it's installed and there's a
+# battery. Prints the new plugin ids.
+make_status_plugins() {
+  local pa bt="" sp cc rc pdir="${XDG_CONFIG_HOME:-$HOME/.config}/xfce4/panel" widgets
+  pa=$(next_plugin_id)
+  xp_new "/plugins/plugin-$pa" string pulseaudio
+  xp_new "/plugins/plugin-$pa/enable-keyboard-shortcuts" bool false
+  widgets="pulseaudio-$pa"
+  if [[ -f /usr/share/xfce4/panel/plugins/battery.desktop ]] && compgen -G "/sys/class/power_supply/BAT*" >/dev/null; then
+    bt=$(next_plugin_id)
+    xp_new "/plugins/plugin-$bt" string battery
+    rc="$pdir/battery-$bt.rc"; mkdir -p "$pdir"
+    printf '%s\n' display_label=false display_icon=true display_power=false display_percentage=true \
+      display_bar=false display_time=false tooltip_display_percentage=true tooltip_display_time=true > "$rc"
+    widgets+=" battery-$bt"
+  fi
+  sp=$(launcher_plugin cupertino-spotlight.desktop "$pdir/launcher-12")
+  cc=$(launcher_plugin cupertino-control-center.desktop "$pdir/launcher-11")
+  state_set STATUS_WIDGETS "$(status_widgets) $widgets launcher-$sp launcher-$cc"
+  echo "$pa $bt $sp $cc"
+}
+
+set_plugin_ids() { # panel id...
+  local p=$1; shift
+  local -a args=(); local id
+  for id in "$@"; do args+=(-t int -s "$id"); done
+  xfconf-query -c xfce4-panel -p "/panels/panel-$p/plugin-ids" -r 2>/dev/null || true
+  xfconf-query -c xfce4-panel -p "/panels/panel-$p/plugin-ids" -n -a "${args[@]}"
+}
+
+new_bar() { # output -> creates a full menu bar panel on it
+  local out=$1 p m app sep clk status
   p=$(( $(xfconf-query -c xfce4-panel -p /panels 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -n 1) + 1 ))
-  m=$(( $(xfconf-query -c xfce4-panel -l | sed -n 's|^/plugins/plugin-\([0-9]*\)$|\1|p' | sort -n | tail -n 1) + 1 ))
-  app=$((m + 1)); sep=$((m + 2)); clk=$((m + 3))
+  m=$(next_plugin_id)
   xp_new "/plugins/plugin-$m" string whiskermenu
+  app=$(next_plugin_id)
   if [[ -n $(state_get APPMENU_IDS) ]]; then
     xp_new "/plugins/plugin-$app" string appmenu
     xp_new "/plugins/plugin-$app/bold-application-name" bool false
@@ -161,9 +220,12 @@ new_bar() { # output -> creates a menu bar panel on it, prints the panel id
   else
     xp_new "/plugins/plugin-$app" string separator
   fi
+  sep=$(next_plugin_id)
   xp_new "/plugins/plugin-$sep" string separator
   xp_new "/plugins/plugin-$sep/expand" bool true
   xp_new "/plugins/plugin-$sep/style" uint 0
+  status=$(make_status_plugins)
+  clk=$(next_plugin_id)
   xp_new "/plugins/plugin-$clk" string clock
   xp_new "/plugins/plugin-$clk/digital-layout" uint 3
   xp_new "/plugins/plugin-$clk/digital-time-font" string "Inter Semi-Bold 10"
@@ -177,8 +239,8 @@ new_bar() { # output -> creates a menu bar panel on it, prints the panel id
   xp_new "/panels/panel-$p/position" string "p=6;x=0;y=0"
   xp_new "/panels/panel-$p/position-locked" bool true
   xp_new "/panels/panel-$p/size" uint 28
-  xfconf-query -c xfce4-panel -p "/panels/panel-$p/plugin-ids" -n -a \
-    -t int -s "$m" -t int -s "$app" -t int -s "$sep" -t int -s "$clk"
+  # shellcheck disable=SC2086  # status is a list of ids
+  set_plugin_ids "$p" "$m" "$app" "$sep" $status "$clk"
   local -a ids=(); local id
   mapfile -t ids < <(xfconf-query -c xfce4-panel -p /panels | grep -E '^[0-9]+$')
   ids+=("$p")
@@ -187,6 +249,32 @@ new_bar() { # output -> creates a menu bar panel on it, prints the panel id
   [[ -n $(state_get APPMENU_IDS) ]] && state_set APPMENU_IDS "$(state_get APPMENU_IDS) $app"
   state_set CLOCK_IDS "$(state_get CLOCK_IDS) $clk"
   state_set BAR_PANELS "$(state_get BAR_PANELS) $p"
+}
+
+# Bars made by older versions only had the menu and the clock: add the status icons.
+# Also drops a power-manager plugin from extra bars (it only works once per desktop).
+upgrade_bar() { # panel -> prints "restart" if it changed
+  local p=$1 id kind status has_sound=0; local -a ids=() keep=()
+  mapfile -t ids < <(xfconf-query -c xfce4-panel -p "/panels/panel-$p/plugin-ids" 2>/dev/null | grep -E '^[0-9]+$')
+  [[ ${#ids[@]} -gt 0 ]] || return 0
+  for id in "${ids[@]}"; do
+    kind=$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" 2>/dev/null || true)
+    [[ $kind == pulseaudio ]] && has_sound=1
+    if [[ $kind == power-manager-plugin || $kind == systray ]]; then
+      xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" -r -R 2>/dev/null || true
+    else
+      keep+=("$id")
+    fi
+  done
+  if [[ $has_sound == 1 ]]; then
+    [[ ${#keep[@]} -eq ${#ids[@]} ]] && return 0
+    set_plugin_ids "$p" "${keep[@]}"
+  else
+    status=$(make_status_plugins)
+    # shellcheck disable=SC2086
+    set_plugin_ids "$p" "${keep[@]:0:${#keep[@]}-1}" $status "${keep[-1]}"
+  fi
+  echo restart
 }
 
 # Give every connected monitor exactly one menu bar: keep bars whose monitor is still
@@ -228,6 +316,9 @@ sync_bars() {
       xset_prop xfce4-panel "/panels/panel-$p/output-name" string "cupertino-spare-$p"
     fi
   done
+  for p in "${bars[@]:1}"; do
+    [[ $(upgrade_bar "$p") == restart ]] && restart=1
+  done
   [[ $restart == 1 ]] && echo restart
   return 0
 }
@@ -235,6 +326,10 @@ sync_bars() {
 sync_monitors() {
   local cur; cur=$(state_get MODE || true)
   mode_vars "${cur:-light}"
+  # one dock that follows the screen you're using (Plank Reloaded), also for older installs
+  if [[ $(state_get DOCK || true) == plank ]]; then
+    gsettings set net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/dock1/ active-display true 2>/dev/null || true
+  fi
   set_wallpaper
   if [[ $(sync_bars) == restart ]]; then
     write_gtk_css

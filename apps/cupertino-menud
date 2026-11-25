@@ -4,6 +4,8 @@
 1. Gives every window a Mac-style menu bar (below).
 2. When a monitor is plugged in or out, puts the wallpaper and a menu bar on every
    screen (runs `cupertino-xfce-mode monitors`).
+3. A wallpaper picked in Desktop Settings goes on every screen and workspace (Xfce
+   only changes the screen the settings window is on).
 
 Apps that export their own menus (GTK menubars, Qt, Electron, ...) keep them.
 Windows that export nothing, or an empty menu (Firefox, terminals without a
@@ -400,6 +402,11 @@ class Daemon:
         self.mon_timer = 0
         Gdk.Screen.get_default().connect("monitors-changed", self.on_monitors)
         self.mon_timer = GLib.timeout_add_seconds(5, self.sync_monitors)
+        # Wallpaper picked in Desktop Settings -> every screen and workspace
+        self.wall_pending = None
+        self.conn.signal_subscribe("org.xfce.Xfconf", "org.xfce.Xfconf", "PropertyChanged",
+                                   "/org/xfce/Xfconf", None, Gio.DBusSignalFlags.NONE,
+                                   self.on_xfconf, None)
         # The registrar forgets everything when it restarts (e.g. when the panel restarts),
         # so (re)register all windows every time it appears on the bus.
         Gio.bus_watch_name_on_connection(self.conn, "com.canonical.AppMenu.Registrar",
@@ -414,6 +421,36 @@ class Daemon:
         self.mon_timer = 0
         print("cupertino-menud: syncing wallpaper and menu bars with the monitors", file=sys.stderr, flush=True)
         run(shutil.which("cupertino-xfce-mode") or os.path.expanduser("~/.local/bin/cupertino-xfce-mode"), "monitors")
+        return False
+
+    def on_xfconf(self, _conn, _sender, _path, _iface, _signal, params, _data):
+        channel, prop, value = params.unpack()
+        if channel != "xfce4-desktop" or not prop.endswith("/last-image") or not isinstance(value, str):
+            return
+        # Only mirror the user's own picks: xfdesktop also writes this key on its own
+        # (e.g. a default for a monitor it hasn't seen), and that must not spread.
+        if subprocess.run(["pgrep", "-u", str(os.getuid()), "-f", "xfdesktop-settings"],
+                          stdout=subprocess.DEVNULL).returncode != 0:
+            return
+        first = self.wall_pending is None
+        self.wall_pending = value
+        if first:
+            GLib.timeout_add(400, self.mirror_wallpaper)
+
+    def mirror_wallpaper(self):
+        value, self.wall_pending = self.wall_pending, None
+        try:
+            props = self.conn.call_sync("org.xfce.Xfconf", "/org/xfce/Xfconf", "org.xfce.Xfconf",
+                                        "GetAllProperties", GLib.Variant("(ss)", ("xfce4-desktop", "/backdrop")),
+                                        None, Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+        except GLib.Error as e:
+            print(f"cupertino-menud: wallpaper: {e.message}", file=sys.stderr)
+            return False
+        for key, cur in props.items():
+            if key.endswith("/last-image") and "/workspace" in key and cur != value:
+                self.conn.call("org.xfce.Xfconf", "/org/xfce/Xfconf", "org.xfce.Xfconf", "SetProperty",
+                               GLib.Variant("(ssv)", ("xfce4-desktop", key, GLib.Variant("s", value))),
+                               None, Gio.DBusCallFlags.NONE, 3000, None, None, None)
         return False
 
     def on_registrar(self, *_args):

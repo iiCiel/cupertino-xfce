@@ -9,7 +9,7 @@ Built on Kali Linux (Xfce 4.20) and tested on a clean Ubuntu 26.04 Xfce system. 
 
 | | |
 |---|---|
-| **Global menu bar** | The focused app's name and **File / Edit / View…** menus in the top bar. Apps without menus of their own (Firefox, the desktop) get standard Mac ones. On the right, like macOS: Wi-Fi, sound, battery, a Spotlight icon, Control Center and the date. One menu bar on every monitor, including ones you plug in later (they get the wallpaper too). |
+| **Global menu bar** | The focused app's name and **File / Edit / View…** menus in the top bar. Apps without menus of their own (Firefox, the desktop) get standard Mac ones. On the right, like macOS: Wi-Fi, sound, battery, a Spotlight icon, Control Center and the date. One menu bar on every monitor, including ones you plug in later (they get the wallpaper too); the dock follows the screen you're using. |
 | **Control Center** | Click the toggles icon next to the clock: Wi-Fi, Bluetooth, Focus (Do Not Disturb), Dark Mode, display brightness, volume, plus Screenshot / Lock / Settings. |
 | **Magnifying dock** | Icons grow as your mouse passes over them, like on a Mac. Floating, frosted and rounded, with dots under running apps, and Downloads and Trash at the right end. Hides when a window covers it ([Plank Reloaded](https://github.com/zquestz/plank-reloaded)). |
 | **Spotlight** | **Super+Space** to search and launch apps. |
@@ -104,6 +104,8 @@ The standard menus work by sending the app its usual keyboard shortcut (Copy sen
 - **Wayland isn't supported.** Use the normal Xfce (X11) session.
 - **picom needs working OpenGL.** If it can't start, the installer falls back to Xfce's own compositor (no blur or rounded corners) and tells you.
 - **Ctrl+Up** opens Mission Control everywhere, like on a Mac, so apps that use Ctrl+Up themselves won't see it.
+- Extra monitors' menu bars have sound, battery (needs `xfce4-battery-plugin`, which Kali includes), Spotlight, Control Center and the clock. The tray icons (Wi-Fi, Bluetooth, apps' own icons) can only be shown once per desktop, so they stay on the main screen's bar.
+- A wallpaper picked in Desktop Settings is copied to every screen and workspace.
 - The app name in the menu bar isn't bold: the menu plugin orders its items differently per app, so a bold rule would sometimes land on the wrong menu.
 - Menus no longer show underlined shortcut letters (`gtk-enable-mnemonics=false`); Alt+letter menu shortcuts inside GTK apps are off too.
 - A QTerminal window that's open during install keeps its old colours until you open a new one after logging back in.

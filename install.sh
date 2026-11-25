@@ -147,7 +147,8 @@ sha_ok() { echo "$2  $1" | sha256sum -c --status; }
 
 # Connected monitors: primary first. Output names only.
 monitors() {
-  xrandr --listmonitors 2>/dev/null | awk 'NR>1 {print ($2 ~ /\*/ ? "0 " : "1 ") $NF}' | sort -s -k1,1 | awk '{print $2}'
+  xrandr --listmonitors 2>/dev/null | awk 'NR > 1 { name = $2; prim = (name ~ /\*/); gsub(/^[+*]+/, "", name); print (prim ? 0 : 1), name }' \
+    | sort -s -n -k1,1 | cut -d' ' -f2
 }
 
 find_desktop() {
@@ -476,40 +477,6 @@ sed "s|^Exec=.*|Exec=$BIN_DIR/cupertino-control-center|" "$HERE/config/icons/cup
 APPMENU_IDS=(); [[ $DO_GLOBAL_MENU -eq 1 ]] && APPMENU_IDS=(2)
 CLOCK_IDS=(8); BAR_PANELS=(1); PANEL_IDS=(1 2)
 [[ $DOCK == plank ]] && PANEL_IDS=(1)
-pid=20; panel=3
-for m in "${MONITORS[@]:1}"; do
-  [[ -n $m ]] || continue
-  menu=$pid; app=$((pid + 1)); sep=$((pid + 2)); clk=$((pid + 3))
-  {
-    echo "/panels/panel-$panel/background-rgba $BAR_RGBA_GV"
-    echo "/panels/panel-$panel/background-style uint32 1"
-    echo "/panels/panel-$panel/length uint32 100"
-    echo "/panels/panel-$panel/output-name '$m'"
-    echo "/panels/panel-$panel/plugin-ids [<$menu>, <$app>, <$sep>, <$clk>]"
-    echo "/panels/panel-$panel/position 'p=6;x=0;y=0'"
-    echo "/panels/panel-$panel/position-locked true"
-    echo "/panels/panel-$panel/size uint32 28"
-    echo "/plugins/plugin-$menu 'whiskermenu'"
-    if [[ $DO_GLOBAL_MENU -eq 1 ]]; then
-      echo "/plugins/plugin-$app 'appmenu'"
-      echo "/plugins/plugin-$app/bold-application-name true"
-      echo "/plugins/plugin-$app/plugins/plugin-$app/expand true"
-    else
-      echo "/plugins/plugin-$app 'separator'"
-    fi
-    echo "/plugins/plugin-$sep 'separator'"
-    echo "/plugins/plugin-$sep/expand true"
-    echo "/plugins/plugin-$sep/style uint32 0"
-    echo "/plugins/plugin-$clk 'clock'"
-    echo "/plugins/plugin-$clk/digital-layout uint32 3"
-    echo "/plugins/plugin-$clk/digital-time-font 'Inter Semi-Bold 10'"
-    echo "/plugins/plugin-$clk/digital-time-format '%a %b %-d  %-I:%M %p'"
-    echo "/plugins/plugin-$clk/mode uint32 2"
-  } >> "$PDIR/config.txt"
-  [[ $DO_GLOBAL_MENU -eq 1 ]] && APPMENU_IDS+=("$app")
-  CLOCK_IDS+=("$clk"); BAR_PANELS+=("$panel"); PANEL_IDS+=("$panel")
-  pid=$((pid + 4)); panel=$((panel + 1))
-done
 panels_line="/panels ["; first=1
 for p in "${PANEL_IDS[@]}"; do panels_line+=$([[ $first -eq 1 ]] && echo "<$p>" || echo ", <$p>"); first=0; done
 sed -i "s|^/panels \[.*\]$|$panels_line]|" "$PDIR/config.txt"
@@ -547,9 +514,13 @@ state_set CLOCK_IDS "${CLOCK_IDS[*]}"
 state_set BAR_PANELS "${BAR_PANELS[*]}"
 state_set DOCK "$DOCK"
 
+state_set STATUS_WIDGETS "systray-4 pulseaudio-5 power-manager-plugin-7 launcher-11 launcher-12"
 xfce4-panel-profiles load "$CONF_DIR/panel-layout.tar.bz2" >/dev/null 2>&1 || die "Loading the panel layout failed. Restore with ./uninstall.sh"
 sleep 2
 pgrep -u "$(id -u)" -x xfce4-panel >/dev/null || { setsid xfce4-panel >/dev/null 2>&1 < /dev/null & }
+# The same full menu bar on every other monitor
+if [[ $(sync_bars) == restart ]]; then xfce4-panel -r >/dev/null 2>&1 || true; sleep 2; fi
+read -r -a BAR_PANELS <<<"$(state_get BAR_PANELS)"
 ok "Menu bar on ${#BAR_PANELS[@]} monitor(s) and Control Center"
 
 # ---- 8b. Plank: the magnifying dock ---------------------------------------------------
@@ -581,6 +552,8 @@ if [[ $DOCK == plank ]]; then
   gsettings set "$PS" position "'bottom'"
   gsettings set "$PS" alignment "'center'"
   gsettings set "$PS" gap-size 6
+  # one dock that follows the screen you're using, like macOS
+  gsettings set "$PS" active-display true 2>/dev/null || true
   gsettings set "$PS" show-dock-item false
   gsettings set "$PS" tooltips-enabled true
   gsettings set "$PS" lock-items false
