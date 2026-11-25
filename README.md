@@ -112,6 +112,10 @@ The standard menus work by sending the app its usual keyboard shortcut (Copy sen
 - With `--docklike`, some apps show as a second dock icon instead of lighting up their pinned one, when their window class doesn't match their `.desktop` file.
 - The dock reveals when the pointer touches the bottom edge while a maximised window covers it, the same as macOS's auto-hide.
 
+## On KDE Plasma?
+
+[kali-looks](https://github.com/iiCiel/kali-looks) does the same for KDE Plasma, and can switch between macOS, Windows XP and Windows 7 looks with one command.
+
 ## Credits
 
 - [WhiteSur GTK theme](https://github.com/vinceliuice/WhiteSur-gtk-theme) (MIT), [WhiteSur Firefox theme](https://github.com/vinceliuice/WhiteSur-firefox-theme) (MIT), [WhiteSur icons](https://github.com/vinceliuice/WhiteSur-icon-theme) (GPL-3.0) and [WhiteSur cursors](https://github.com/vinceliuice/WhiteSur-cursors) (GPL-3.0) by Vince Liuice. Downloaded from upstream, not redistributed here.
