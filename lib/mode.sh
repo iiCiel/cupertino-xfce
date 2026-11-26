@@ -143,6 +143,14 @@ set_plank_theme() {
 # Plank's "dock1"; the others copy its settings and share its apps.
 PLANK_PATH=/net/launchpad/plank/docks
 plank_docks() { gsettings get net.launchpad.plank enabled-docks 2>/dev/null | tr -d "[]',@as" | tr ' ' '\n' | grep . || echo dock1; }
+# Connected monitors, primary first, leaving out any that only mirror another one
+# (same position and size), so a mirrored pair gets one dock, not two stacked.
+distinct_outputs() {
+  xrandr --listmonitors 2>/dev/null | awk 'NR > 1 {
+      name = $2; prim = (name ~ /\*/); gsub(/^[+*]+/, "", name)
+      g = $3; gsub(/\/[0-9]+/, "", g); print (prim ? 0 : 1), g, name }' \
+    | sort -s -n -k1,1 | awk '!seen[$2]++ { print $3 }'
+}
 dock_name() { [[ $2 == 0 ]] && echo dock1 || echo "dock-${1//[^A-Za-z0-9]/-}"; }
 dock_running() {
   if [[ $1 == dock1 ]]; then pgrep -u "$(id -u)" -f '^plank( -n dock1)?$' >/dev/null
@@ -152,7 +160,7 @@ sync_docks() {
   [[ $(state_get DOCK || true) == plank ]] || return 0
   command -v plank >/dev/null || return 0
   local -a outs names=(); local i=0 o n p plank_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/plank"
-  mapfile -t outs < <(connected_outputs)
+  mapfile -t outs < <(distinct_outputs)
   [[ ${#outs[@]} -gt 0 ]] || return 0
   for o in "${outs[@]}"; do
     n=$(dock_name "$o" "$i"); names+=("$n")
@@ -326,7 +334,7 @@ upgrade_bar() { # panel -> prints "restart" if it changed
 sync_bars() {
   local -a outs bars free=(); local p o
   declare -A used=()
-  mapfile -t outs < <(connected_outputs)
+  mapfile -t outs < <(distinct_outputs)
   [[ ${#outs[@]} -gt 0 ]] || return 0
   read -r -a bars <<<"$(state_get BAR_PANELS)"
   [[ ${#bars[@]} -gt 0 ]] || return 0
