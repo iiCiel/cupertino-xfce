@@ -645,6 +645,13 @@ Exec=picom --config "$CONF_DIR/picom.conf"
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOF
+  # The picom package starts its own picom at login (/etc/xdg/autostart/picom.desktop,
+  # with ~/.config/picom). Only one compositor can run: whichever starts first wins, so
+  # turn the stock one off for you, or the dock ends up blurred some logins and not others.
+  STOCK_PICOM="${XDG_CONFIG_HOME:-$HOME/.config}/autostart/picom.desktop"
+  if [[ -f /etc/xdg/autostart/picom.desktop && ! -e $STOCK_PICOM ]]; then
+    printf '[Desktop Entry]\nType=Application\nName=picom\nHidden=true\nX-Cupertino-Xfce=true\n' > "$STOCK_PICOM"
+  fi
   if pgrep -u "$(id -u)" -x picom >/dev/null; then pkill -u "$(id -u)" -x picom || true; sleep 1; fi
   apply_prop xfwm4 /general/use_compositing bool false
   setsid picom --config "$CONF_DIR/picom.conf" >/dev/null 2>&1 < /dev/null &

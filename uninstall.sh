@@ -60,6 +60,9 @@ fi
 
 # 1. Effects and helpers
 log "Stopping picom"
+if grep -qs '^X-Cupertino-Xfce=true' "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/picom.desktop"; then
+  rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/picom.desktop"
+fi
 rm -f "$AUTOSTART_PICOM" "$AUTOSTART_PLANK" "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/cupertino-xfce-once.desktop"
 pkill -u "$(id -u)" -x plank 2>/dev/null || true
 pkill -u "$(id -u)" -f "picom --config $CONF_DIR/picom.conf" 2>/dev/null || true
