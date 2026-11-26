@@ -143,9 +143,22 @@ set_plank_theme() {
 # Plank's "dock1"; the others copy its settings and share its apps.
 PLANK_PATH=/net/launchpad/plank/docks
 plank_docks() { gsettings get net.launchpad.plank enabled-docks 2>/dev/null | tr -d "[]',@as" | tr ' ' '\n' | grep . || echo dock1; }
-# Connected monitors, primary first, leaving out any that only mirror another one
-# (same position and size), so a mirrored pair gets one dock, not two stacked.
+# The screens desktop apps actually see, primary first. Two outputs showing the same
+# picture (mirrored) are one screen to GTK, under one of their names; the dock and the
+# panel only know that name, so ask GTK. Falls back to xrandr, leaving out mirrors.
 distinct_outputs() {
+  python3 - 2>/dev/null <<'PY' && return 0
+import gi
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk
+s = Gdk.Screen.get_default()
+n = s.get_n_monitors()
+if n == 0:
+    raise SystemExit(1)
+p = s.get_primary_monitor()
+for i in [p] + [i for i in range(n) if i != p]:
+    print(s.get_monitor_plug_name(i))
+PY
   xrandr --listmonitors 2>/dev/null | awk 'NR > 1 {
       name = $2; prim = (name ~ /\*/); gsub(/^[+*]+/, "", name)
       g = $3; gsub(/\/[0-9]+/, "", g); print (prim ? 0 : 1), g, name }' \
