@@ -402,6 +402,10 @@ class Daemon:
         self.mon_timer = 0
         Gdk.Screen.get_default().connect("monitors-changed", self.on_monitors)
         self.mon_timer = GLib.timeout_add_seconds(5, self.sync_monitors)
+        # Unplugging a screen doesn't always reach X (the screen stays "on", so GTK sees
+        # no change): watch the cables themselves too. Reading these files is cheap.
+        self.cables = self.read_cables()
+        GLib.timeout_add_seconds(2, self.check_cables)
         # Wallpaper picked in Desktop Settings -> every screen and workspace
         self.wall_pending = None
         self.conn.signal_subscribe("org.xfce.Xfconf", "org.xfce.Xfconf", "PropertyChanged",
@@ -416,6 +420,27 @@ class Daemon:
         if self.mon_timer:
             GLib.source_remove(self.mon_timer)
         self.mon_timer = GLib.timeout_add_seconds(3, self.sync_monitors)
+
+    @staticmethod
+    def read_cables():
+        state = {}
+        try:
+            for name in os.listdir("/sys/class/drm"):
+                try:
+                    with open("/sys/class/drm/%s/status" % name) as fh:
+                        state[name] = fh.read().strip()
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        return state
+
+    def check_cables(self):
+        now = self.read_cables()
+        if now != self.cables:
+            self.cables = now
+            self.on_monitors()
+        return True
 
     def sync_monitors(self):
         self.mon_timer = 0

@@ -396,9 +396,46 @@ sync_bars() {
   return 0
 }
 
+# A monitor that's unplugged can stay switched on in X (nothing turns it off), so the
+# desktop keeps its size and windows sit on a screen that isn't there. Turn off outputs
+# that are disconnected but still on, and move what's left so it starts at the top left.
+fix_outputs() {
+  command -v xrandr >/dev/null || return 0
+  local q args=() name x y minx=999999 miny=999999 n=0
+  q=$(xrandr 2>/dev/null) || return 0
+  while read -r name; do args+=(--output "$name" --off); done < <(
+    awk '$2 == "disconnected" && $3 ~ /^[0-9]+x[0-9]+\+/ {print $1}' <<<"$q")
+  [[ ${#args[@]} -gt 0 ]] || return 0
+  # outputs that stay on, and where they are
+  local -a keep=()
+  while read -r name x y; do
+    keep+=("$name $x $y"); n=$((n + 1))
+    (( x < minx )) && minx=$x; (( y < miny )) && miny=$y
+  done < <(awk '$2 == "connected" {
+      for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) {
+        split($i, a, /[x+]/); print $1, a[3], a[4]; break } }' <<<"$q")
+  if [[ $n -gt 0 ]] && (( minx > 0 || miny > 0 )); then
+    for name in "${keep[@]}"; do
+      read -r name x y <<<"$name"
+      args+=(--output "$name" --pos "$((x - minx))x$((y - miny))")
+    done
+  fi
+  echo "cupertino-xfce: turning off unplugged screens: xrandr ${args[*]}" >&2
+  xrandr "${args[@]}" || true
+  sleep 1
+}
+
+# Windows left hanging off the screen after a change come back onto a monitor.
+rescue_windows() {
+  command -v python3 >/dev/null || return 0
+  python3 "$APP_DIR/lib/rescue-windows.py" 2>&1 >/dev/null | head -n 20 >&2 || true
+}
+
 sync_monitors() {
   local cur; cur=$(state_get MODE || true)
   mode_vars "${cur:-light}"
+  fix_outputs
+  rescue_windows
   sync_docks
   set_wallpaper
   if [[ $(sync_bars) == restart ]]; then
