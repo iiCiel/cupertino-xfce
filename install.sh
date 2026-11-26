@@ -552,15 +552,15 @@ if [[ $DOCK == plank ]]; then
   gsettings set "$PS" position "'bottom'"
   gsettings set "$PS" alignment "'center'"
   gsettings set "$PS" gap-size 6
-  # one dock that follows the screen you're using, like macOS
-  gsettings set "$PS" active-display true 2>/dev/null || true
+  # a dock on every monitor, always there (sync_docks copies these settings to each)
+  gsettings set "$PS" active-display false 2>/dev/null || true
   gsettings set "$PS" show-dock-item false
   gsettings set "$PS" tooltips-enabled true
   gsettings set "$PS" lock-items false
   gsettings set "$PS" anchor-docklets true 2>/dev/null || true
   mkdir -p "$(dirname "$AUTOSTART_PLANK")"
-  printf '[Desktop Entry]\nType=Application\nName=Dock (cupertino-xfce)\nExec=plank\nX-GNOME-Autostart-enabled=true\n' > "$AUTOSTART_PLANK"
-  setsid plank >/dev/null 2>&1 < /dev/null &
+  printf '[Desktop Entry]\nType=Application\nName=Dock (cupertino-xfce)\nExec=%s docks\nOnlyShowIn=XFCE;\nX-GNOME-Autostart-enabled=true\n' "$BIN_DIR/cupertino-xfce-mode" > "$AUTOSTART_PLANK"
+  "$BIN_DIR/cupertino-xfce-mode" docks
   sleep 2
   if pgrep -u "$(id -u)" -x plank >/dev/null; then ok "Dock running: magnifies on hover, floats above the screen edge"
   else warn "Plank didn't start; run 'plank' in a terminal to see why."; fi

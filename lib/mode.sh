@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # cupertino-xfce-mode: switch the whole look between light and dark.
 #
-#   cupertino-xfce-mode light | dark | toggle | status | monitors
+#   cupertino-xfce-mode light | dark | toggle | status | monitors | docks
 #
 # Installed by install.sh to ~/.local/share/cupertino-xfce/app and linked as
 # ~/.local/bin/cupertino-xfce-mode. Also used by Control Center's Appearance toggle.
@@ -133,7 +133,50 @@ set_dock_dots() {
 
 set_plank_theme() {
   [[ $(state_get DOCK) == plank ]] || return 0
-  gsettings set net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/dock1/ theme "$PLANK_THEME" 2>/dev/null || true
+  local d
+  for d in $(plank_docks); do
+    gsettings set "net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/$d/" theme "$PLANK_THEME" 2>/dev/null || true
+  done
+}
+
+# A dock on every monitor, always there (like the menu bar). The main monitor's dock is
+# Plank's "dock1"; the others copy its settings and share its apps.
+PLANK_PATH=/net/launchpad/plank/docks
+plank_docks() { gsettings get net.launchpad.plank enabled-docks 2>/dev/null | tr -d "[]',@as" | tr ' ' '\n' | grep . || echo dock1; }
+dock_name() { [[ $2 == 0 ]] && echo dock1 || echo "dock-${1//[^A-Za-z0-9]/-}"; }
+dock_running() {
+  if [[ $1 == dock1 ]]; then pgrep -u "$(id -u)" -f '^plank( -n dock1)?$' >/dev/null
+  else pgrep -u "$(id -u)" -f "^plank -n $1\$" >/dev/null; fi
+}
+sync_docks() {
+  [[ $(state_get DOCK || true) == plank ]] || return 0
+  command -v plank >/dev/null || return 0
+  local -a outs names=(); local i=0 o n p plank_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/plank"
+  mapfile -t outs < <(connected_outputs)
+  [[ ${#outs[@]} -gt 0 ]] || return 0
+  for o in "${outs[@]}"; do
+    n=$(dock_name "$o" "$i"); names+=("$n")
+    if [[ $n != dock1 ]]; then
+      dconf dump "$PLANK_PATH/dock1/" | dconf load "$PLANK_PATH/$n/"
+      mkdir -p "$plank_cfg/$n"
+      [[ -L $plank_cfg/$n/launchers ]] || { rm -rf "$plank_cfg/$n/launchers"; ln -s ../dock1/launchers "$plank_cfg/$n/launchers"; }
+    fi
+    gsettings set "net.launchpad.plank.dock.settings:$PLANK_PATH/$n/" monitor "$o" 2>/dev/null || true
+    gsettings set "net.launchpad.plank.dock.settings:$PLANK_PATH/$n/" active-display false 2>/dev/null || true
+    i=$((i + 1))
+  done
+  # docks for monitors that are gone
+  for p in $(pgrep -u "$(id -u)" -f '^plank -n dock-'); do
+    n=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | awk '{print $3}')
+    printf '%s\n' "${names[@]}" | grep -qxF -- "$n" || kill "$p" 2>/dev/null || true
+  done
+  for n in "${names[@]}"; do
+    dock_running "$n" && continue
+    if [[ $n == dock1 ]]; then setsid plank >/dev/null 2>&1 < /dev/null &
+    else setsid plank -n "$n" >/dev/null 2>&1 < /dev/null &
+    fi
+  done
+  return 0
 }
 
 set_bar_colours() {
@@ -326,10 +369,7 @@ sync_bars() {
 sync_monitors() {
   local cur; cur=$(state_get MODE || true)
   mode_vars "${cur:-light}"
-  # one dock that follows the screen you're using (Plank Reloaded), also for older installs
-  if [[ $(state_get DOCK || true) == plank ]]; then
-    gsettings set net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/dock1/ active-display true 2>/dev/null || true
-  fi
+  sync_docks
   set_wallpaper
   if [[ $(sync_bars) == restart ]]; then
     write_gtk_css
@@ -390,9 +430,11 @@ main() {
           # open QTerminal overwrote when it closed, then remove this autostart entry
       mode_vars "$cur"; set_terminal
       rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/cupertino-xfce-once.desktop" ;;
-    monitors) # a monitor was plugged in or out: wallpaper and a menu bar on every screen
+    monitors) # a monitor was plugged in or out: wallpaper, menu bar and dock on every screen
       sync_monitors ;;
-    *) echo "usage: cupertino-xfce-mode light|dark|toggle|status|monitors" >&2; exit 2 ;;
+    docks) # start a dock on every monitor (login autostart)
+      sync_docks ;;
+    *) echo "usage: cupertino-xfce-mode light|dark|toggle|status|monitors|docks" >&2; exit 2 ;;
   esac
 }
 
