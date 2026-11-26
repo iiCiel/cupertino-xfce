@@ -114,6 +114,16 @@ if command -v dconf >/dev/null && PD=$(first_with plank.dconf); then
   [[ -s $PD/plank.dconf ]] && dconf load /net/launchpad/plank/ < "$PD/plank.dconf"
   if [[ ! -s $PD/plank.dconf ]]; then rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/plank/dock1/launchers"; fi
 fi
+# the extra docks (one per monitor): stop them, forget their settings, remove their folders
+for p in $(pgrep -u "$(id -u)" -f '(^|/)plank -n dock-' || true); do kill "$p" 2>/dev/null || true; done
+if command -v dconf >/dev/null; then
+  for d in $(dconf list /net/launchpad/plank/docks/ 2>/dev/null | sed -n 's#^\(dock-[A-Za-z0-9-]*\)/$#\1#p'); do
+    dconf reset -f "/net/launchpad/plank/docks/$d/" 2>/dev/null || true
+  done
+fi
+for d in "${XDG_CONFIG_HOME:-$HOME/.config}"/plank/dock-*; do
+  [[ -L $d/launchers ]] && rm -rf "$d"
+done
 rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/plank/themes/Cupertino-Light" "${XDG_DATA_HOME:-$HOME/.local/share}/plank/themes/Cupertino-Dark"
 
 # 4. Firefox: put back each profile's own chrome folder and user.js

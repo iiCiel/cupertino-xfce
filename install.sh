@@ -43,7 +43,7 @@ PLANK_DEBS=(
   "arm64 plank-reloaded-debian_0.11.178-1_arm64.deb bea8743bffbf924740240e4e59d578028b099cceba6b491f0689ccd24f689465"
 )
 
-PACKAGES=(git curl xz-utils bzip2 x11-xserver-utils xdg-user-dirs picom rofi fonts-inter fonts-jetbrains-mono
+PACKAGES=(git curl xz-utils bzip2 x11-xserver-utils dconf-cli xdg-user-dirs picom rofi fonts-inter fonts-jetbrains-mono
           python3-gi gir1.2-gtk-3.0 xfce4-panel-profiles xfce4-docklike-plugin xfce4-whiskermenu-plugin
           xfce4-pulseaudio-plugin xfce4-notifyd xfce4-power-manager-plugins xfce4-screenshooter)
 APPMENU_PACKAGES=(appmenu-registrar appmenu-gtk3-module gir1.2-wnck-3.0 xdotool wmctrl x11-utils)
@@ -559,7 +559,7 @@ if [[ $DOCK == plank ]]; then
   gsettings set "$PS" lock-items false
   gsettings set "$PS" anchor-docklets true 2>/dev/null || true
   mkdir -p "$(dirname "$AUTOSTART_PLANK")"
-  printf '[Desktop Entry]\nType=Application\nName=Dock (cupertino-xfce)\nExec=%s docks\nOnlyShowIn=XFCE;\nX-GNOME-Autostart-enabled=true\n' "$BIN_DIR/cupertino-xfce-mode" > "$AUTOSTART_PLANK"
+  printf '[Desktop Entry]\nType=Application\nName=Dock (cupertino-xfce)\nExec="%s" docks\nOnlyShowIn=XFCE;\nX-GNOME-Autostart-enabled=true\n' "$BIN_DIR/cupertino-xfce-mode" > "$AUTOSTART_PLANK"
   "$BIN_DIR/cupertino-xfce-mode" docks
   sleep 2
   if pgrep -u "$(id -u)" -x plank >/dev/null; then ok "Dock running: magnifies on hover, floats above the screen edge"
@@ -582,7 +582,7 @@ if [[ $DO_TERMINAL -eq 1 ]]; then
 [Desktop Entry]
 Type=Application
 Name=cupertino-xfce (finish setup)
-Exec=$BIN_DIR/cupertino-xfce-mode once
+Exec="$BIN_DIR/cupertino-xfce-mode" once
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOF
@@ -641,7 +641,7 @@ if [[ $DO_EFFECTS -eq 1 ]]; then
 Type=Application
 Name=picom (cupertino-xfce)
 Comment=Blur, rounded corners and shadows
-Exec=picom --config $CONF_DIR/picom.conf
+Exec=picom --config "$CONF_DIR/picom.conf"
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOF
@@ -666,7 +666,7 @@ cat > "$AUTOSTART_MENUD" <<EOF
 Type=Application
 Name=cupertino-xfce helper
 Comment=Standard menus for apps without any; menu bar and wallpaper on every monitor
-Exec=$BIN_DIR/cupertino-menud
+Exec="$BIN_DIR/cupertino-menud"
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 NoDisplay=true

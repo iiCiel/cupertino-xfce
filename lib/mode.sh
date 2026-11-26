@@ -109,7 +109,7 @@ set_wallpaper() {
       xset_prop xfce4-desktop "$k" string "$wp"
     fi
   done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/workspace[0-9]+/last-image$' || true)
-  main=$(connected_outputs | head -n 1)
+  main=$(connected_outputs | head -n 1) || true
   ref=$(xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor$main/workspace0/last-image" 2>/dev/null || true)
   [[ -n $ref ]] || ref=$wp
   n=$(xfconf-query -c xfwm4 -p /general/workspace_count 2>/dev/null || echo 4)
@@ -142,7 +142,11 @@ set_plank_theme() {
 # A dock on every monitor, always there (like the menu bar). The main monitor's dock is
 # Plank's "dock1"; the others copy its settings and share its apps.
 PLANK_PATH=/net/launchpad/plank/docks
-plank_docks() { gsettings get net.launchpad.plank enabled-docks 2>/dev/null | tr -d "[]',@as" | tr ' ' '\n' | grep . || echo dock1; }
+# dock1 plus every per-monitor dock we've made (Plank only lists dock1 in enabled-docks)
+plank_docks() {
+  echo dock1
+  { command -v dconf >/dev/null && dconf list "$PLANK_PATH/"; } 2>/dev/null | sed -n 's#^\(dock-[A-Za-z0-9-]*\)/$#\1#p'
+}
 # The screens desktop apps actually see, primary first. Two outputs showing the same
 # picture (mirrored) are one screen to GTK, under one of their names; the dock and the
 # panel only know that name, so ask GTK. Falls back to xrandr, leaving out mirrors.
@@ -156,8 +160,10 @@ n = s.get_n_monitors()
 if n == 0:
     raise SystemExit(1)
 p = s.get_primary_monitor()
-for i in [p] + [i for i in range(n) if i != p]:
-    print(s.get_monitor_plug_name(i))
+names = [s.get_monitor_plug_name(i) for i in [p] + [i for i in range(n) if i != p]]
+if not all(names):
+    raise SystemExit(1)
+print("\n".join(names))
 PY
   xrandr --listmonitors 2>/dev/null | awk 'NR > 1 {
       name = $2; prim = (name ~ /\*/); gsub(/^[+*]+/, "", name)
@@ -166,28 +172,31 @@ PY
 }
 dock_name() { [[ $2 == 0 ]] && echo dock1 || echo "dock-${1//[^A-Za-z0-9]/-}"; }
 dock_running() {
-  if [[ $1 == dock1 ]]; then pgrep -u "$(id -u)" -f '^plank( -n dock1)?$' >/dev/null
-  else pgrep -u "$(id -u)" -f "^plank -n $1\$" >/dev/null; fi
+  if [[ $1 == dock1 ]]; then pgrep -u "$(id -u)" -f '(^|/)plank( -n dock1)?$' >/dev/null
+  else pgrep -u "$(id -u)" -f "(^|/)plank -n $1\$" >/dev/null; fi
 }
 sync_docks() {
   [[ $(state_get DOCK || true) == plank ]] || return 0
   command -v plank >/dev/null || return 0
+  # you turned the dock off (autostart removed or disabled): leave it off
+  [[ -f $AUTOSTART_PLANK ]] && ! grep -qi '^Hidden=true' "$AUTOSTART_PLANK" || return 0
   local -a outs names=(); local i=0 o n p plank_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/plank"
   mapfile -t outs < <(distinct_outputs)
   [[ ${#outs[@]} -gt 0 ]] || return 0
   for o in "${outs[@]}"; do
     n=$(dock_name "$o" "$i"); names+=("$n")
     if [[ $n != dock1 ]]; then
-      dconf dump "$PLANK_PATH/dock1/" | dconf load "$PLANK_PATH/$n/"
+      # dock1 is the one you set up; the others follow it (size, zoom, hiding, theme)
+      if command -v dconf >/dev/null; then dconf dump "$PLANK_PATH/dock1/" | dconf load "$PLANK_PATH/$n/" || true; fi
       mkdir -p "$plank_cfg/$n"
-      [[ -L $plank_cfg/$n/launchers ]] || { rm -rf "$plank_cfg/$n/launchers"; ln -s ../dock1/launchers "$plank_cfg/$n/launchers"; }
+      [[ -L $plank_cfg/$n/launchers ]] || { rm -rf "$plank_cfg/$n/launchers"; ln -sfn ../dock1/launchers "$plank_cfg/$n/launchers"; }
     fi
     gsettings set "net.launchpad.plank.dock.settings:$PLANK_PATH/$n/" monitor "$o" 2>/dev/null || true
     gsettings set "net.launchpad.plank.dock.settings:$PLANK_PATH/$n/" active-display false 2>/dev/null || true
     i=$((i + 1))
   done
   # docks for monitors that are gone
-  for p in $(pgrep -u "$(id -u)" -f '^plank -n dock-'); do
+  for p in $(pgrep -u "$(id -u)" -f '(^|/)plank -n dock-'); do
     n=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | awk '{print $3}')
     printf '%s\n' "${names[@]}" | grep -qxF -- "$n" || kill "$p" 2>/dev/null || true
   done
@@ -442,6 +451,15 @@ apply_mode() {
 
 main() {
   local cmd=${1:-status} cur
+  # monitor events can arrive in bursts; two runs at once would both add a menu bar
+  case $cmd in
+    light|dark|toggle|monitors|docks)
+      # (-o: the lock stays with flock, so a dock or panel started here doesn't keep it)
+      if [[ -z ${CX_LOCKED:-} ]] && command -v flock >/dev/null; then
+        mkdir -p "$CONF_DIR"
+        CX_LOCKED=1 exec flock -o -w 60 "$CONF_DIR/.lock" "$(readlink -f "$0")" "$@"
+      fi ;;
+  esac
   cur=$(state_get MODE); cur=${cur:-light}
   case $cmd in
     light|dark) apply_mode "$cmd" ;;
