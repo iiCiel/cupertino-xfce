@@ -1,5 +1,14 @@
 # cupertino-xfce
 
+> **This project moved into [kali-looks](https://github.com/iiCiel/kali-looks)**, as its `xfce` look (folder [`looks/xfce`](https://github.com/iiCiel/kali-looks/tree/main/looks/xfce), full history kept). Install it with:
+>
+> ```bash
+> git clone https://github.com/iiCiel/kali-looks.git && cd kali-looks && ./looks.sh install
+> looks setup xfce
+> ```
+>
+> This repository is archived and no longer updated.
+
 **Make Xfce look and feel like macOS, with one script.**
 Built on Kali Linux (Xfce 4.20) and tested on a clean Ubuntu 26.04 Xfce system. Aimed at Kali, Debian 13 and other recent Debian-based Xfce setups.
 
